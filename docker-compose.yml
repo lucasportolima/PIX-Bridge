@@ -1,1 +1,209 @@
+name: pix-bridge
 
+networks:
+  pix-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  mongo-data:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+
+services:
+
+  # ── Kafka (KRaft mode) ──────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: pix-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"       # external (host → kafka)
+      - "9093:9093"       # controller (internal only)
+    environment:
+      # KRaft identity
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # Listeners
+      # PLAINTEXT  → inter-broker communication (container network)
+      # CONTROLLER → KRaft controller protocol
+      # EXTERNAL   → client connections from the host machine
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Storage & reliability
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168           # 7-day message retention
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false" # topics created explicitly by kafka-init
+
+      # Single-broker settings (PoC — no replication overhead)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # Idempotent producer support
+      KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION: 1
+
+      # KRaft cluster ID (static for local dev — generate a new one for prod)
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      start_period: 30s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - pix-net
+    restart: unless-stopped
+
+  # ── Kafka Topics Init (one-shot) ───────────────────────────────────────────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: pix-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./infra/kafka/create-topics.sh:/scripts/create-topics.sh:ro
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    networks:
+      - pix-net
+    restart: on-failure
+
+  # ── MongoDB (Replica Set required for multi-document transactions) ──────────
+  mongodb:
+    image: mongo:7.0
+    container_name: pix-mongodb
+    hostname: mongodb
+    ports:
+      - "27017:27017"
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    environment:
+      MONGO_INITDB_DATABASE: bank_a
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Uses mongosh (available in mongo:7.0) to verify the server is accepting connections
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pix-net
+    restart: unless-stopped
+
+  # ── MongoDB Replica Set Init (one-shot) ────────────────────────────────────
+  mongo-init:
+    image: mongo:7.0
+    container_name: pix-mongo-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./infra/mongo/init-replica.js:/scripts/init-replica.js:ro
+    entrypoint:
+      - mongosh
+      - --host
+      - mongodb:27017
+      - --quiet
+      - /scripts/init-replica.js
+    networks:
+      - pix-net
+    restart: on-failure
+
+  # ── PostgreSQL (Bank B) ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pix-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bank_b
+      POSTGRES_USER: pix_user
+      POSTGRES_PASSWORD: pix_secret
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # init.sql runs automatically on first startup (empty data dir)
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pix_user -d bank_b"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pix-net
+    restart: unless-stopped
+
+  # ── RabbitMQ (Bank B internal message bus) ─────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pix-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI → http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: pix_user
+      RABBITMQ_DEFAULT_PASS: pix_secret
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pix-net
+    restart: unless-stopped
+
+  # ── Redis (GraphQL PubSub + JWT refresh token store) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: pix-redis
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass pix_secret
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "pix_secret", "ping"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - pix-net
+    restart: unless-stopped
+
+  # ── RedPanda Console (Kafka UI) ────────────────────────────────────────────
+  redpanda-console:
+    image: redpandadata/console:v2.4.6
+    container_name: pix-redpanda-console
+    ports:
+      - "8080:8080"  # UI → http://localhost:8080
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: kafka:29092
+    networks:
+      - pix-net
+    restart: unless-stopped
