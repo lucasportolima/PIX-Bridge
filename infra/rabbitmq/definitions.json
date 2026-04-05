@@ -1,0 +1,68 @@
+{
+  "rabbit_version": "3.13.0",
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "exchanges": [
+    {
+      "name": "pix.direct",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "pix.dlx",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "process.pix",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "pix.dlx",
+        "x-dead-letter-routing-key": "pix.dlq",
+        "x-message-ttl": 86400000,
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "pix.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-max-length": 1000,
+        "x-overflow": "reject-publish"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "pix.direct",
+      "vhost": "/",
+      "destination": "process.pix",
+      "destination_type": "queue",
+      "routing_key": "process.pix",
+      "arguments": {}
+    },
+    {
+      "source": "pix.dlx",
+      "vhost": "/",
+      "destination": "pix.dlq",
+      "destination_type": "queue",
+      "routing_key": "pix.dlq",
+      "arguments": {}
+    }
+  ]
+}
