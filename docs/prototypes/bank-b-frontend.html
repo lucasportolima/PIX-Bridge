@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banco B — PIX-Bridge Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #f8fafc;
+      --surface:  #ffffff;
+      --surface2: #f1f5f9;
+      --border:   #e2e8f0;
+      --border2:  #cbd5e1;
+      --accent:   #6366f1;
+      --accent2:  #8b5cf6;
+      --success:  #059669;
+      --warning:  #d97706;
+      --danger:   #dc2626;
+      --text:     #0f172a;
+      --text2:    #475569;
+      --text3:    #94a3b8;
+      --mono:     'DM Mono', monospace;
+      --sidebar:  #0f172a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── AUTH ── */
+    #auth-screen {
+      min-height: 100vh; display: flex;
+      background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 50%, #f0fdf4 100%);
+    }
+
+    .auth-left {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      background: var(--sidebar); padding: 60px;
+      position: relative; overflow: hidden;
+    }
+    .auth-left::before {
+      content: '';
+      position: absolute; top: -100px; right: -100px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .auth-left-content { position: relative; max-width: 340px; }
+    .auth-left h1 { font-size: 36px; font-weight: 700; color: white; letter-spacing: -1.5px; margin-bottom: 16px; line-height: 1.1; }
+    .auth-left h1 span { color: #818cf8; }
+    .auth-left p { color: #94a3b8; font-size: 15px; line-height: 1.6; margin-bottom: 32px; }
+    .feature-list { display: flex; flex-direction: column; gap: 12px; }
+    .feature-item { display: flex; align-items: center; gap: 10px; color: #e2e8f0; font-size: 13px; }
+    .feature-dot { width: 6px; height: 6px; border-radius: 50%; background: #818cf8; flex-shrink: 0; }
+
+    .auth-right {
+      flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px;
+    }
+
+    .auth-card {
+      width: 400px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 24px; padding: 40px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    }
+
+    .bank-b-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .bank-b-icon {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+    .bank-b-name { font-size: 18px; font-weight: 700; color: var(--text); }
+    .bank-b-sub { font-size: 12px; color: var(--text3); }
+
+    .auth-form-title { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .auth-form-sub { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+
+    .tabs { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+    .tab {
+      flex: 1; padding: 10px; border: none; font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; background: var(--surface); color: var(--text2); transition: all .2s;
+    }
+    .tab.active { background: var(--accent); color: white; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; display: block; text-transform: uppercase; letter-spacing: 0.4px; }
+    .form-input {
+      width: 100%; padding: 11px 14px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-family: inherit; font-size: 14px;
+      transition: border-color .2s; outline: none;
+    }
+    .form-input:focus { border-color: var(--accent); background: white; }
+
+    .btn-primary {
+      width: 100%; padding: 13px; background: var(--accent);
+      border: none; border-radius: 10px; color: white; font-family: inherit;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: all .2s;
+    }
+    .btn-primary:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.35); }
+
+    /* ── DASHBOARD ── */
+    #dashboard { display: none; min-height: 100vh; }
+    .app-layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px; flex-shrink: 0; background: var(--sidebar);
+      display: flex; flex-direction: column; padding: 20px 0;
+      position: sticky; top: 0; height: 100vh;
+    }
+
+    .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 20px 24px; border-bottom: 1px solid #1e293b; }
+    .sidebar-logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .sidebar-logo-text { font-size: 14px; font-weight: 700; color: white; }
+    .sidebar-logo-tag { font-size: 10px; color: #64748b; }
+
+    .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-radius: 10px; font-size: 13px; font-weight: 500; color: #94a3b8;
+      cursor: pointer; transition: all .2s; background: none; border: none;
+      font-family: inherit; width: 100%; text-align: left;
+    }
+    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
+    .sidebar-item.active { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+    .sidebar-item-icon { font-size: 16px; width: 20px; flex-shrink: 0; text-align: center; }
+
+    .sidebar-section-label { padding: 8px 12px 4px; font-size: 10px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px; }
+
+    .sidebar-bottom { padding: 12px; border-top: 1px solid #1e293b; }
+    .user-info { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; cursor: pointer; }
+    .user-info:hover { background: #1e293b; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+    .user-name { font-size: 12px; font-weight: 600; color: white; }
+    .user-account { font-size: 10px; color: #64748b; font-family: var(--mono); }
+
+    /* Content area */
+    .content { flex: 1; overflow-y: auto; }
+
+    .topbar {
+      padding: 16px 28px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-title { font-size: 18px; font-weight: 700; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+    .live-badge {
+      display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+      color: var(--success); background: rgba(5,150,105,0.1); padding: 5px 10px; border-radius: 20px;
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .content-body { padding: 28px; }
+
+    /* Balance hero */
+    .balance-hero {
+      background: linear-gradient(135deg, var(--sidebar) 0%, #1e293b 100%);
+      border-radius: 20px; padding: 28px 32px; margin-bottom: 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: relative; overflow: hidden;
+    }
+    .balance-hero::after {
+      content: '₿';
+      position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
+      font-size: 120px; opacity: 0.04; font-weight: 700; line-height: 1;
+    }
+    .balance-hero-left {}
+    .balance-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .balance-amount { font-size: 42px; font-weight: 700; color: white; letter-spacing: -2px; font-family: var(--mono); }
+    .balance-account { font-size: 13px; color: #475569; margin-top: 6px; font-family: var(--mono); }
+
+    .balance-hero-actions { display: flex; gap: 10px; position: relative; z-index: 1; }
+    .hero-btn {
+      padding: 10px 20px; border-radius: 10px; font-family: inherit;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .hero-btn-primary { background: var(--accent); border: none; color: white; }
+    .hero-btn-primary:hover { background: #4f46e5; }
+    .hero-btn-ghost { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: white; }
+    .hero-btn-ghost:hover { background: rgba(255,255,255,0.15); }
+
+    /* Stat cards */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+    .stat-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .stat-value.green { color: var(--success); }
+    .stat-value.red { color: var(--danger); }
+    .stat-value.purple { color: var(--accent); }
+    .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+    /* Extrato */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-title { font-size: 15px; font-weight: 700; }
+
+    .filter-pills { display: flex; gap: 6px; }
+    .filter-pill {
+      padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+      transition: all .2s; font-family: inherit;
+    }
+    .filter-pill.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+    .statement-table { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+    .table-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; padding: 12px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+    .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; padding: 14px 20px; border-bottom: 1px solid var(--border); transition: background .15s; align-items: center; cursor: pointer; }
+    .table-row:last-child { border-bottom: none; }
+    .table-row:hover { background: var(--surface2); }
+
+    .tx-desc-cell { display: flex; align-items: center; gap: 10px; }
+    .tx-mini-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .tx-mini-icon.inbound { background: rgba(5,150,105,0.1); }
+    .tx-mini-icon.outbound { background: rgba(220,38,38,0.1); }
+    .tx-desc-main { font-size: 13px; font-weight: 500; }
+    .tx-desc-sub { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+    .tx-amount-cell { font-size: 14px; font-weight: 700; font-family: var(--mono); }
+    .tx-amount-cell.in { color: var(--success); }
+    .tx-amount-cell.out { color: var(--danger); }
+
+    .direction-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .direction-badge.in { background: rgba(5,150,105,0.1); color: var(--success); }
+    .direction-badge.out { background: rgba(220,38,38,0.1); color: var(--danger); }
+
+    .status-chip { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .status-chip.completed { background: rgba(5,150,105,0.1); color: var(--success); }
+    .status-chip.processing { background: rgba(217,119,6,0.1); color: var(--warning); }
+    .status-chip.failed { background: rgba(220,38,38,0.1); color: var(--danger); }
+
+    .trace-id { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+    /* Transfer form */
+    .transfer-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+    .transfer-form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; }
+    .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; }
+    .info-title { font-size: 13px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-key { color: var(--text2); }
+    .info-val { font-weight: 600; }
+    .info-val.accent { color: var(--accent); font-family: var(--mono); }
+
+    .amount-input-wrapper { position: relative; }
+    .amount-input-wrapper .currency-prefix {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      font-size: 14px; font-weight: 600; color: var(--text2);
+    }
+    .amount-input-wrapper input { padding-left: 38px; }
+
+    .btn-send-b {
+      width: 100%; padding: 14px; background: var(--accent);
+      border: none; border-radius: 12px; color: white; font-family: inherit;
+      font-size: 15px; font-weight: 700; cursor: pointer; transition: all .2s;
+      margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-send-b:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(99,102,241,0.4); }
+
+    /* Notification panel */
+    .notif-panel {
+      position: fixed; right: 20px; bottom: 20px; width: 340px;
+      display: flex; flex-direction: column; gap: 8px; z-index: 999;
+    }
+    .notif {
+      background: white; border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; display: flex; align-items: flex-start; gap: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      animation: slideUp .3s ease; cursor: pointer;
+    }
+    .notif:hover { border-color: var(--accent); }
+    .notif-icon { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .notif-icon.success { background: rgba(5,150,105,0.12); }
+    .notif-icon.info { background: rgba(99,102,241,0.12); }
+    .notif-body {}
+    .notif-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .notif-msg { font-size: 12px; color: var(--text2); line-height: 1.4; }
+    .notif-time { font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Confirm modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.6);
+      display: flex; align-items: center; justify-content: center; z-index: 200;
+      opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: all; }
+    .modal-box {
+      background: white; border-radius: 24px; padding: 32px; width: 380px;
+      transform: scale(0.96); transition: transform .2s;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-backdrop.open .modal-box { transform: scale(1); }
+    .modal-box-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+
+    .confirm-details { background: var(--surface2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .confirm-detail-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+    .confirm-detail-row + .confirm-detail-row { border-top: 1px solid var(--border); }
+    .confirm-detail-label { color: var(--text2); }
+    .confirm-detail-value { font-weight: 600; }
+    .confirm-detail-value.big { font-size: 20px; color: var(--accent); font-family: var(--mono); }
+
+    .modal-box-actions { display: flex; gap: 10px; }
+    .btn-modal-cancel { flex: 1; padding: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; color: var(--text2); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-modal-confirm { flex: 2; padding: 12px; background: var(--accent); border: none; border-radius: 10px; color: white; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-modal-confirm:hover { background: #4f46e5; }
+  </style>
+</head>
+<body>
+
+<!-- ─── AUTH ─── -->
+<div id="auth-screen">
+  <div class="auth-left">
+    <div class="auth-left-content">
+      <h1>Banco B<br/><span>Dashboard</span></h1>
+      <p>Gerencie suas transferências PIX em tempo real com total segurança e rastreabilidade.</p>
+      <div class="feature-list">
+        <div class="feature-item"><div class="feature-dot"></div>Receba transferências instantâneas do Banco A</div>
+        <div class="feature-item"><div class="feature-dot"></div>Extrato em tempo real via SSE</div>
+        <div class="feature-item"><div class="feature-dot"></div>Envie de volta para o Banco A</div>
+        <div class="feature-item"><div class="feature-dot"></div>Trace ID para rastreabilidade completa</div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="auth-card">
+      <div class="bank-b-logo">
+        <div class="bank-b-icon">🏛</div>
+        <div>
+          <div class="bank-b-name">PIXBridge · Banco B</div>
+          <div class="bank-b-sub">Portal do Cliente</div>
+        </div>
+      </div>
+      <div class="auth-form-title">Acessar conta</div>
+      <div class="auth-form-sub">Entre com suas credenciais para continuar</div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTabB('login', this)">Entrar</button>
+        <button class="tab" onclick="switchTabB('register', this)">Cadastrar</button>
+      </div>
+
+      <div id="tab-b-login">
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <input class="form-input" type="email" placeholder="ana@bancob.com" value="ana@bancob.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Senha</label>
+          <input class="form-input" type="password" placeholder="••••••••" value="senha456" />
+        </div>
+        <button class="btn-primary" onclick="doLoginB()">Entrar</button>
+      </div>
+
+      <div id="tab-b-register" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Nome completo</label>
+          <input class="form-input" type="text" placeholder="Ana Lima" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <input class="form-input" type="email" placeholder="ana@bancob.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Senha</label>
+          <input class="form-input" type="password" placeholder="Mínimo 8 caracteres" />
+        </div>
+        <button class="btn-primary" onclick="doLoginB()">Criar conta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DASHBOARD ─── -->
+<div id="dashboard">
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">🏛</div>
+        <div>
+          <div class="sidebar-logo-text">Banco B</div>
+          <div class="sidebar-logo-tag">PIX-Bridge</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Principal</div>
+        <button class="sidebar-item active" onclick="setPageB('overview', this)">
+          <span class="sidebar-item-icon">📊</span> Visão Geral
+        </button>
+        <button class="sidebar-item" onclick="setPageB('extrato', this)">
+          <span class="sidebar-item-icon">📋</span> Extrato
+        </button>
+
+        <div class="sidebar-section-label">Operações</div>
+        <button class="sidebar-item" onclick="setPageB('transferir', this)">
+          <span class="sidebar-item-icon">📤</span> Transferir
+        </button>
+
+        <div class="sidebar-section-label">Sistema</div>
+        <button class="sidebar-item" onclick="setPageB('traces', this)">
+          <span class="sidebar-item-icon">🔍</span> Trace Debug
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="user-info">
+          <div class="user-avatar">AL</div>
+          <div>
+            <div class="user-name">Ana Lima</div>
+            <div class="user-account">B-001</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="content">
+      <div class="topbar">
+        <div class="topbar-title" id="page-title-b">Visão Geral</div>
+        <div class="topbar-right">
+          <div class="live-badge"><div class="live-dot"></div>SSE Conectado</div>
+          <div style="font-size:12px; color:var(--text2)">
+            <span style="font-family:var(--mono); color:var(--accent)">B-001</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-body">
+
+        <!-- Overview -->
+        <div id="page-b-overview">
+          <div class="balance-hero">
+            <div class="balance-hero-left">
+              <div class="balance-label">Saldo disponível</div>
+              <div class="balance-amount" id="b-balance">R$ 600,00</div>
+              <div class="balance-account">Conta: B-001 · Ana Lima</div>
+            </div>
+            <div class="balance-hero-actions">
+              <button class="hero-btn hero-btn-primary" onclick="setPageB('transferir', document.querySelector('.sidebar-item:nth-child(4)'))">
+                ➤ Transferir
+              </button>
+              <button class="hero-btn hero-btn-ghost" onclick="setPageB('extrato', document.querySelector('.sidebar-item:nth-child(3)'))">
+                📋 Extrato
+              </button>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Total recebido</div>
+              <div class="stat-value green" id="b-recv-total">R$ 200,00</div>
+              <div class="stat-sub">↑ 2 transferências</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total enviado</div>
+              <div class="stat-value red" id="b-sent-total">R$ 50,00</div>
+              <div class="stat-sub">↓ 1 transferência</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Transações hoje</div>
+              <div class="stat-value purple">3</div>
+              <div class="stat-sub">● Última às 14:32</div>
+            </div>
+          </div>
+
+          <div class="section-header">
+            <div class="section-title">Últimas transações</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" onclick="filterTx('all', this)">Todas</button>
+              <button class="filter-pill" onclick="filterTx('INBOUND', this)">Recebidas</button>
+              <button class="filter-pill" onclick="filterTx('OUTBOUND', this)">Enviadas</button>
+            </div>
+          </div>
+          <div id="b-tx-table-overview"></div>
+        </div>
+
+        <!-- Extrato -->
+        <div id="page-b-extrato" style="display:none">
+          <div class="section-header">
+            <div class="section-title">Extrato Completo</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" onclick="filterTx('all', this)">Todas</button>
+              <button class="filter-pill" onclick="filterTx('INBOUND', this)">Recebidas</button>
+              <button class="filter-pill" onclick="filterTx('OUTBOUND', this)">Enviadas</button>
+            </div>
+          </div>
+          <div id="b-tx-table-extrato"></div>
+        </div>
+
+        <!-- Transferir -->
+        <div id="page-b-transferir" style="display:none">
+          <div class="transfer-layout">
+            <div class="transfer-form-card">
+              <h3 style="margin-bottom:24px; font-size:17px">Nova Transferência → Banco A</h3>
+              <div class="form-group">
+                <label class="form-label">Conta destino (Banco A)</label>
+                <input class="form-input" type="text" placeholder="A-001" id="b-to-account" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Valor</label>
+                <div class="amount-input-wrapper">
+                  <span class="currency-prefix">R$</span>
+                  <input class="form-input" type="number" placeholder="0,00" id="b-amount" min="0.01" step="0.01" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Descrição</label>
+                <input class="form-input" type="text" placeholder="Descrição opcional..." id="b-desc" />
+              </div>
+              <button class="btn-send-b" onclick="openBModal()">
+                ➤ Confirmar Transferência
+              </button>
+            </div>
+            <div>
+              <div class="info-card">
+                <div class="info-title">Sua Conta</div>
+                <div class="info-row"><span class="info-key">Titular</span><span class="info-val">Ana Lima</span></div>
+                <div class="info-row"><span class="info-key">Conta</span><span class="info-val accent">B-001</span></div>
+                <div class="info-row"><span class="info-key">Saldo</span><span class="info-val" id="b-saldo-info">R$ 600,00</span></div>
+                <div class="info-row"><span class="info-key">Banco</span><span class="info-val">Banco B</span></div>
+              </div>
+              <div class="info-card" style="margin-top:14px">
+                <div class="info-title">Como funciona</div>
+                <div style="font-size:12px; color:var(--text2); line-height:1.7">
+                  1. Débito atômico do seu saldo<br/>
+                  2. Evento publicado no Kafka<br/>
+                  3. Banco A processa e credita<br/>
+                  4. Confirmação via evento de retorno
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace Debug -->
+        <div id="page-b-traces" style="display:none">
+          <div class="section-header">
+            <div class="section-title">🔍 Debug de Trace ID</div>
+          </div>
+          <div class="info-card">
+            <div class="form-group">
+              <label class="form-label">Trace ID</label>
+              <input class="form-input" type="text" placeholder="a1b2c3d4-e5f6-7890-abcd-ef1234567890" id="trace-search" />
+            </div>
+            <button class="btn-primary" style="width:auto; padding:10px 20px" onclick="searchTrace()">Buscar</button>
+
+            <div id="trace-result" style="margin-top:20px; display:none">
+              <div style="font-size:13px; font-weight:700; margin-bottom:12px; color:var(--text2)">EVENTOS ENCONTRADOS</div>
+              <div id="trace-events"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── CONFIRM MODAL ─── -->
+<div class="modal-backdrop" id="b-modal">
+  <div class="modal-box">
+    <div class="modal-box-title">Confirmar Transferência</div>
+    <div class="confirm-details">
+      <div class="confirm-detail-row">
+        <span class="confirm-detail-label">De</span>
+        <span class="confirm-detail-value">Conta B-001</span>
+      </div>
+      <div class="confirm-detail-row">
+        <span class="confirm-detail-label">Para</span>
+        <span class="confirm-detail-value" id="b-modal-to">A-001</span>
+      </div>
+      <div class="confirm-detail-row">
+        <span class="confirm-detail-label">Valor</span>
+        <span class="confirm-detail-value big" id="b-modal-amount">R$ 50,00</span>
+      </div>
+      <div class="confirm-detail-row">
+        <span class="confirm-detail-label">Taxa PIX</span>
+        <span class="confirm-detail-value" style="color:var(--success)">Grátis</span>
+      </div>
+    </div>
+    <div class="modal-box-actions">
+      <button class="btn-modal-cancel" onclick="closeBModal()">Cancelar</button>
+      <button class="btn-modal-confirm" onclick="confirmBTransfer()">✓ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── NOTIFICATIONS ─── -->
+<div class="notif-panel" id="notif-panel"></div>
+
+<script>
+  let bBalance = 60000; // centavos
+  let bTxFilter = 'all';
+  let bTransactions = [
+    { id:'btx1', transferId:'550e8400-e29b-41d4-a716-446655440000', counterpart:'A-001', amount:10000, dir:'INBOUND',  status:'COMPLETED', date:'05/04/2026 14:32', traceId:'a1b2c3-...' },
+    { id:'btx2', transferId:'7c9e6679-7425-40de-944b-e07fc1f90ae7', counterpart:'A-001', amount:10000, dir:'INBOUND',  status:'COMPLETED', date:'05/04/2026 11:00', traceId:'b2c3d4-...' },
+    { id:'btx3', transferId:'6ba7b810-9dad-11d1-80b4-00c04fd430c8', counterpart:'A-001', amount:5000,  dir:'OUTBOUND', status:'COMPLETED', date:'04/04/2026 09:15', traceId:'c3d4e5-...' },
+    { id:'btx4', transferId:'3fa85f64-5717-4562-b3fc-2c963f66afa6', counterpart:'A-042', amount:8000,  dir:'INBOUND',  status:'PROCESSING',date:'05/04/2026 14:58', traceId:'d4e5f6-...' },
+  ];
+
+  // ── Auth ──
+  function switchTabB(tab, el) {
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-b-login').style.display    = tab === 'login' ? 'block' : 'none';
+    document.getElementById('tab-b-register').style.display = tab === 'register' ? 'block' : 'none';
+  }
+
+  function doLoginB() {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    renderBTx('b-tx-table-overview');
+    renderBTx('b-tx-table-extrato');
+    updateBBalance();
+    setTimeout(() => pushNotif('success', '💰 Nova transferência recebida!', 'R$ 80,00 de A-001 · Processando via Kafka...'), 2000);
+    setTimeout(() => {
+      bTransactions.unshift({ id:'btxlive', transferId:'live-'+Date.now(), counterpart:'A-001', amount:8000, dir:'INBOUND', status:'COMPLETED', date:new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), traceId:'e5f6g7-...' });
+      bBalance += 8000;
+      renderBTx('b-tx-table-overview');
+      renderBTx('b-tx-table-extrato');
+      updateBBalance();
+      pushNotif('success', '✓ Crédito confirmado via SSE!', 'R$ 80,00 de A-001 · trace: e5f6g7-...');
+    }, 5000);
+  }
+
+  // ── Navigation ──
+  const pageTitles = { overview:'Visão Geral', extrato:'Extrato', transferir:'Nova Transferência', traces:'Debug de Trace' };
+  function setPageB(page, el) {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    if (el) el.classList.add('active');
+    ['overview','extrato','transferir','traces'].forEach(p => {
+      document.getElementById('page-b-'+p).style.display = p === page ? 'block' : 'none';
+    });
+    document.getElementById('page-title-b').textContent = pageTitles[page] || 'Dashboard';
+    if (page === 'extrato') renderBTx('b-tx-table-extrato');
+  }
+
+  // ── Transactions ──
+  function filterTx(filter, el) {
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    bTxFilter = filter;
+    renderBTx('b-tx-table-overview');
+    renderBTx('b-tx-table-extrato');
+  }
+
+  function renderBTx(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    let txs = bTxFilter === 'all' ? bTransactions : bTransactions.filter(t => t.dir === bTxFilter);
+
+    container.innerHTML = `
+      <div class="statement-table">
+        <div class="table-header">
+          <div>Descrição</div>
+          <div>Valor</div>
+          <div>Direção</div>
+          <div>Status</div>
+          <div>Trace ID</div>
+        </div>
+        ${txs.map(tx => `
+          <div class="table-row">
+            <div class="tx-desc-cell">
+              <div class="tx-mini-icon ${tx.dir.toLowerCase()}">
+                ${tx.dir === 'INBOUND' ? '📥' : '📤'}
+              </div>
+              <div>
+                <div class="tx-desc-main">${tx.dir === 'INBOUND' ? 'Recebido de' : 'Enviado para'} ${tx.counterpart}</div>
+                <div class="tx-desc-sub">${tx.date}</div>
+              </div>
+            </div>
+            <div class="tx-amount-cell ${tx.dir === 'INBOUND' ? 'in' : 'out'}">
+              ${tx.dir === 'INBOUND' ? '+' : '−'} ${formatBRLB(tx.amount)}
+            </div>
+            <div>
+              <span class="direction-badge ${tx.dir === 'INBOUND' ? 'in' : 'out'}">
+                ${tx.dir === 'INBOUND' ? '↓ Entrada' : '↑ Saída'}
+              </span>
+            </div>
+            <div>
+              <span class="status-chip ${tx.status.toLowerCase()}">${statusLabel(tx.status)}</span>
+            </div>
+            <div class="trace-id">${tx.traceId}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function statusLabel(s) { return { COMPLETED:'Concluído', PROCESSING:'Processando', FAILED:'Falhou' }[s] || s; }
+  function formatBRLB(cents) { return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(cents/100); }
+
+  function updateBBalance() {
+    document.getElementById('b-balance').textContent  = formatBRLB(bBalance);
+    document.getElementById('b-saldo-info').textContent = formatBRLB(bBalance);
+  }
+
+  // ── Transfer ──
+  function openBModal() {
+    const to     = document.getElementById('b-to-account').value || 'A-001';
+    const amount = Math.round(parseFloat(document.getElementById('b-amount').value || '50') * 100);
+    document.getElementById('b-modal-to').textContent     = to;
+    document.getElementById('b-modal-amount').textContent = formatBRLB(amount);
+    document.getElementById('b-modal').dataset.to     = to;
+    document.getElementById('b-modal').dataset.amount = amount;
+    document.getElementById('b-modal').classList.add('open');
+  }
+  function closeBModal() { document.getElementById('b-modal').classList.remove('open'); }
+
+  function confirmBTransfer() {
+    const modal    = document.getElementById('b-modal');
+    const to       = modal.dataset.to;
+    const amtCents = parseInt(modal.dataset.amount);
+    closeBModal();
+
+    if (amtCents > bBalance) {
+      pushNotif('error', '✗ Saldo insuficiente', 'Não é possível realizar a transferência.');
+      return;
+    }
+
+    bBalance -= amtCents;
+    bTransactions.unshift({
+      id: 'btx-' + Date.now(),
+      transferId: crypto.randomUUID ? crypto.randomUUID() : 'new-' + Date.now(),
+      counterpart: to, amount: amtCents, dir: 'OUTBOUND',
+      status: 'PROCESSING',
+      date: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
+      traceId: 'live-trace-...'
+    });
+    renderBTx('b-tx-table-overview');
+    renderBTx('b-tx-table-extrato');
+    updateBBalance();
+    pushNotif('info', '⏳ Transferência enviada!', `${formatBRLB(amtCents)} para ${to} · Publicando no Kafka...`);
+
+    setTimeout(() => {
+      const tx = bTransactions.find(t => t.status === 'PROCESSING' && t.dir === 'OUTBOUND');
+      if (tx) { tx.status = 'COMPLETED'; renderBTx('b-tx-table-overview'); renderBTx('b-tx-table-extrato'); }
+      pushNotif('success', '✓ Transferência confirmada!', `Banco A confirmou o recebimento de ${formatBRLB(amtCents)}.`);
+    }, 3500);
+  }
+
+  // ── Trace Debug ──
+  function searchTrace() {
+    const traceId = document.getElementById('trace-search').value || 'a1b2c3-...';
+    const events = [
+      { time: '14:30:00.100', service: 'bank-a-api',    event: 'transfer_initiated',    detail: 'Débito de R$100 na conta A-001' },
+      { time: '14:30:00.200', service: 'bank-a-outbox', event: 'outbox_published',       detail: 'Evento publicado no tópico pix.transfer.initiated' },
+      { time: '14:30:00.350', service: 'bank-b-worker', event: 'message_consumed',       detail: 'Mensagem consumida do Kafka, encaminhando para RabbitMQ' },
+      { time: '14:30:00.420', service: 'bank-b-worker', event: 'idempotency_checked',    detail: 'transfer_id não encontrado em processed_transfers → prosseguir' },
+      { time: '14:30:00.500', service: 'bank-b-worker', event: 'transfer_credited',      detail: 'Crédito de R$100 na conta B-001 com SELECT FOR UPDATE' },
+      { time: '14:30:00.520', service: 'bank-b-worker', event: 'completion_published',   detail: 'Evento pix.transfer.completed publicado no Kafka' },
+      { time: '14:30:00.650', service: 'bank-a-api',    event: 'transfer_completed',     detail: 'Status atualizado para COMPLETED · Subscription emitida' },
+    ];
+    document.getElementById('trace-result').style.display = 'block';
+    document.getElementById('trace-events').innerHTML = events.map(e => `
+      <div style="display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); font-size:12px">
+        <span style="font-family:var(--mono); color:var(--text3); flex-shrink:0; width:90px">${e.time}</span>
+        <span style="background:rgba(99,102,241,0.1); color:var(--accent); padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700; height:fit-content; white-space:nowrap; flex-shrink:0">${e.service}</span>
+        <span style="font-weight:600; color:var(--text); flex-shrink:0">${e.event}</span>
+        <span style="color:var(--text2)">${e.detail}</span>
+      </div>
+    `).join('');
+  }
+
+  // ── Notifications ──
+  function pushNotif(type, title, msg) {
+    const panel = document.getElementById('notif-panel');
+    const notif = document.createElement('div');
+    notif.className = 'notif';
+    const icons = { success: '✓', info: 'ℹ', error: '✗' };
+    notif.innerHTML = `
+      <div class="notif-icon ${type === 'success' ? 'success' : 'info'}">${type === 'success' ? '✓' : type === 'error' ? '✗' : '⏳'}</div>
+      <div class="notif-body">
+        <div class="notif-title">${title}</div>
+        <div class="notif-msg">${msg}</div>
+        <div class="notif-time">Agora</div>
+      </div>
+    `;
+    notif.onclick = () => notif.remove();
+    panel.appendChild(notif);
+    setTimeout(() => notif.remove(), 6000);
+  }
+</script>
+</body>
+</html>
