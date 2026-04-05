@@ -6,6 +6,8 @@ COMPOSE  := docker compose
 DC_FILE  := docker-compose.yml
 PROJECT  := pix-bridge
 
+SCRIPTS_DIR := infra
+
 .DEFAULT_GOAL := help
 
 # ── Help ──────────────────────────────────────────────────────────────────────
@@ -32,12 +34,19 @@ help:
 	@echo "  make redis-shell    Open Redis CLI"
 	@echo "  make rabbit-shell   Open RabbitMQ management shell"
 	@echo ""
+	@echo "  Health"
+	@echo "  ─────────────────────────────────────────"
+	@echo "  make health         Probe completo de todos os serviços"
+	@echo "  make health s=kafka Probe de um serviço específico"
+	@echo "  make wait           Aguarda todos os serviços ficarem healthy"
+	@echo ""
 	@echo "  Utilities"
 	@echo "  ─────────────────────────────────────────"
-	@echo "  make kafka-topics   List all Kafka topics"
-	@echo "  make kafka-groups   List all Kafka consumer groups"
-	@echo "  make mongo-rs       Show MongoDB replica set status"
-	@echo "  make generate-jwt-keys  Generate RS256 key pair for Bank A JWT"
+	@echo "  make kafka-topics        Listar tópicos Kafka"
+	@echo "  make topics-describe     Detalhar configurações dos tópicos PIX"
+	@echo "  make kafka-groups        Listar consumer groups"
+	@echo "  make mongo-rs            Status do replica set MongoDB"
+	@echo "  make generate-jwt-keys   Gerar par de chaves RS256 para JWT"
 	@echo ""
 
 # ── First-time Setup ──────────────────────────────────────────────────────────
@@ -49,7 +58,8 @@ setup:
 	else \
 		echo "✓ .env already exists. Skipping copy."; \
 	fi
-	@chmod +x infra/kafka/create-topics.sh
+	@chmod +x $(SCRIPTS_DIR)/kafka/create-topics.sh
+	@chmod +x $(SCRIPTS_DIR)/healthcheck.sh
 	@mkdir -p orange-bank purple-bank
 	@echo "✓ Setup complete. Run 'make up' to start the stack."
 
@@ -85,11 +95,32 @@ reset:
 
 .PHONY: status
 status:
+	@$(COMPOSE) ps
+
+# Probe completo: verifica conectividade e configurações de cada serviço.
+# Uso: make health            → todos os serviços
+#      make health s=kafka    → apenas kafka
+#      make health s=mongo    → apenas mongo
+.PHONY: health
+health:
+	@chmod +x $(SCRIPTS_DIR)/healthcheck.sh
+ifdef s
+	@bash $(SCRIPTS_DIR)/healthcheck.sh $(s)
+else
+	@bash $(SCRIPTS_DIR)/healthcheck.sh
+endif
+
+# Bloqueia até que todos os containers principais estejam healthy.
+# Útil para scripts de CI que precisam garantir que a infra está pronta
+# antes de rodar testes de integração.
+.PHONY: wait
+wait:
+	@echo "Aguardando todos os serviços ficarem healthy..."
+	@while docker compose ps | grep -E "starting|unhealthy" | grep -qv "kafka-init\|mongo-init"; do \
+		printf "."; sleep 3; \
+	done
 	@echo ""
-	$(COMPOSE) ps
-	@echo ""
-	@echo "  Health:"
-	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
+	@$(MAKE) health
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 .PHONY: logs
@@ -124,8 +155,22 @@ rabbit-shell:
 # ── Kafka Utilities ───────────────────────────────────────────────────────────
 .PHONY: kafka-topics
 kafka-topics:
-	@echo "Kafka topics:"
-	$(COMPOSE) exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+	@echo "Tópicos no cluster Kafka:"
+	@$(COMPOSE) exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+# Mostra configurações detalhadas (partições, retenção, líder) de cada tópico PIX.
+.PHONY: topics-describe
+topics-describe:
+	@echo ""
+	@echo "=== pix.transfer.initiated ==="
+	@$(COMPOSE) exec kafka kafka-topics --bootstrap-server localhost:9092 --describe --topic pix.transfer.initiated
+	@echo ""
+	@echo "=== pix.transfer.completed ==="
+	@$(COMPOSE) exec kafka kafka-topics --bootstrap-server localhost:9092 --describe --topic pix.transfer.completed
+	@echo ""
+	@echo "=== pix.transfer.failed ==="
+	@$(COMPOSE) exec kafka kafka-topics --bootstrap-server localhost:9092 --describe --topic pix.transfer.failed
+	@echo ""
 
 .PHONY: kafka-groups
 kafka-groups:
