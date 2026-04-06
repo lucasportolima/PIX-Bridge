@@ -204,6 +204,13 @@ services:
         condition: service_healthy
     environment:
       KAFKA_BROKERS: kafka:29092
+    # wget está disponível na imagem Alpine base do console
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080"]
+      start_period: 15s
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - pix-net
     restart: unless-stopped

@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
 # Kafka Topics Init Script
-# Runs inside the kafka-init one-shot container after Kafka is healthy.
+# Executado dentro do container kafka-init (one-shot) após o Kafka estar healthy.
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 BROKER="kafka:29092"
 REPLICATION_FACTOR=1
-RETENTION_MS=604800000  # 7 days
+RETENTION_MS=604800000   # 7 dias em ms
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-log() { echo "[kafka-init] $*"; }
+log()  { echo "[kafka-init] $*"; }
+ok()   { echo "[kafka-init] ✓ $*"; }
+fail() { echo "[kafka-init] ✗ $*" >&2; exit 1; }
 
 wait_for_kafka() {
-  log "Waiting for Kafka broker at ${BROKER}..."
+  log "Aguardando broker Kafka em ${BROKER}..."
+  local retries=30
   until kafka-topics --bootstrap-server "$BROKER" --list &>/dev/null; do
+    retries=$((retries - 1))
+    [ "$retries" -eq 0 ] && fail "Kafka não ficou disponível a tempo."
     sleep 2
   done
-  log "Kafka is ready."
+  ok "Kafka disponível."
 }
 
 create_topic() {
@@ -36,20 +41,47 @@ create_topic() {
     --config "retention.ms=${retention}" \
     --config "min.insync.replicas=1"
 
-  log "✓ Topic ready: ${name} (partitions: ${partitions}, retention: ${retention}ms)"
+  ok "Tópico criado: ${name} (partições: ${partitions}, retenção: ${retention}ms)"
+}
+
+verify_topic() {
+  local name=$1
+  log "Verificando configurações do tópico: ${name}"
+
+  # Confirma que o tópico existe e mostra partições + líder
+  kafka-topics \
+    --bootstrap-server "$BROKER" \
+    --describe \
+    --topic "$name" \
+    | grep -E "Topic:|PartitionCount:|ReplicationFactor:|Configs:"
+
+  echo ""
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 wait_for_kafka
 
-log "Creating PIX-Bridge topics..."
+log "──────────────────────────────────────────"
+log "Criando tópicos do PIX-Bridge..."
+log "──────────────────────────────────────────"
 
-# Inter-bank transfer events (partitioned by toAccountNumber)
+# Eventos de transferência interbancária (chave de partição = toAccountNumber)
 create_topic "pix.transfer.initiated"  3 "$RETENTION_MS"
 create_topic "pix.transfer.completed"  3 "$RETENTION_MS"
 create_topic "pix.transfer.failed"     3 "$RETENTION_MS"
 
 log ""
-log "All topics created successfully:"
+log "──────────────────────────────────────────"
+log "Verificando configurações dos tópicos..."
+log "──────────────────────────────────────────"
+
+verify_topic "pix.transfer.initiated"
+verify_topic "pix.transfer.completed"
+verify_topic "pix.transfer.failed"
+
+log "Lista final de tópicos no cluster:"
 kafka-topics --bootstrap-server "$BROKER" --list
+
+log "──────────────────────────────────────────"
+ok "Todos os tópicos criados e verificados com sucesso."

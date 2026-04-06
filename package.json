@@ -1,0 +1,49 @@
+{
+  "name": "pix-bridge",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PIX-Bridge — monorepo contendo Bank A (NestJS/GraphQL) e Bank B (FastAPI)",
+  "workspaces": [
+    "bank_a/api",
+    "bank_b/api"
+  ],
+  "scripts": {
+    "bank-a:dev": "npm run start:dev --workspace=bank_a/api",
+    "bank-a:build": "npm run build --workspace=bank_a/api",
+    "bank-a:test": "npm run test --workspace=bank_a/api",
+    "bank-a:test:e2e": "npm run test:e2e --workspace=bank_a/api",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:reset": "docker compose down -v && docker compose up -d",
+    "infra:health": "bash infra/healthcheck.sh",
+    "prepare": "husky",
+    "commit": "cz"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "lint-staged": {
+    "bank_a/api/src/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "**/*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
