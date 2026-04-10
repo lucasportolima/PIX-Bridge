@@ -1,43 +1,18 @@
-import { Field, Float, ObjectType } from '@nestjs/graphql';
+import { Field, ObjectType } from '@nestjs/graphql';
 
-/**
- * Projeção pública do usuário exposta via GraphQL.
- *
- * Nunca expõe `passwordHash` — o campo existe no documento MongoDB
- * mas não é declarado aqui, então o GraphQL nunca o inclui no schema.
- *
- * `balance` é retornado em centavos para o cliente converter (R$100 = 10000).
- */
-@ObjectType()
-export class UserType {
-  @Field()
-  id: string;
-
-  @Field()
-  accountNumber: string;
-
-  @Field()
-  fullName: string;
-
-  @Field()
-  email: string;
-
-  @Field()
-  pixKey: string;
-
-  @Field(() => Float)
-  balance: number;
-
-  @Field()
-  isActive: boolean;
-}
+// UserType pertence ao domínio Account — importamos e re-exportamos
+// para não quebrar imports existentes e deixar a dependência explícita.
+export { UserType } from '../../account/dto/user.type';
+import { UserType } from '../../account/dto/user.type';
 
 /**
  * Payload retornado pelas mutations `register` e `login`.
  *
- * O cliente deve:
- *  - Guardar `accessToken` em memória (não em localStorage — XSS risk)
- *  - Guardar `refreshToken` em httpOnly cookie (não implementado neste POC)
+ * Boas práticas de segurança para o cliente:
+ *  - `accessToken`: guardar em memória (variável JS), não em localStorage
+ *    (vulnerável a XSS). Válido por 15 minutos.
+ *  - `refreshToken`: idealmente em cookie httpOnly (não implementado neste POC).
+ *    Válido por 7 dias.
  */
 @ObjectType()
 export class AuthPayload {

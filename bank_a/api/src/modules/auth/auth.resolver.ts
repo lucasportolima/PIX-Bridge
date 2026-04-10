@@ -4,28 +4,12 @@ import { AuthService } from './auth.service';
 import { AccountService } from '../account/account.service';
 import { RegisterInput } from './dto/register.input';
 import { LoginInput } from './dto/login.input';
-import { AuthPayload, UserType } from './dto/auth-payload.type';
+import { AuthPayload } from './dto/auth-payload.type';
+import { UserType } from '../account/dto/user.type';
+import { toUserType } from '../account/account.resolver';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { JwtPayload } from './strategies/jwt.strategy';
-import type { UserDocument } from '../account/schemas/user.schema';
-
-/**
- * Mapeia um UserDocument do Mongoose para o tipo público UserType do GraphQL.
- * Essa função existe para isolar explicitamente quais campos saem do banco
- * versus quais chegam ao cliente — nunca expõe `passwordHash`.
- */
-function toUserType(user: UserDocument): UserType {
-  const userType = new UserType();
-  userType.id = (user._id as unknown as { toString(): string }).toString();
-  userType.accountNumber = user.accountNumber;
-  userType.fullName = user.fullName;
-  userType.email = user.email;
-  userType.pixKey = user.pixKey;
-  userType.balance = user.balance;
-  userType.isActive = user.isActive;
-  return userType;
-}
 
 @Resolver()
 export class AuthResolver {
